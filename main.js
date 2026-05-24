@@ -156,9 +156,14 @@ function setupIPC() {
         try { fs.unlinkSync(tmpScript); } catch (_) {}
         log(code === 0 ? '[OK] 安装脚本执行完成 ✅' : `[ERR] 安装脚本退出码: ${code}`, code === 0 ? 'success' : 'error');
 
-        // 重新检测 node 路径（脚本可能中途装了 Node.js）
+        // 重新检测 node 路径（脚本可能中途装了 Node.js，PATH 未刷新）
         if (!nodePath) {
-          try {
+          const knownPaths = [
+            'C:\\Program Files\\nodejs\\node.exe',
+            'C:\\Program Files (x86)\\nodejs\\node.exe',
+          ];
+          nodePath = knownPaths.find(p => fs.existsSync(p)) || '';
+          if (!nodePath) try {
             const r = require('child_process').execSync('where node', { encoding: 'buffer', windowsHide: true, timeout: 5000 });
             nodePath = DECODE(r).trim().split('\n')[0].trim();
           } catch (_) {}
@@ -234,12 +239,13 @@ db.close();
           }
         }
 
-        // 设持久环境变量（setx），claude 开箱即用
+        // 设持久环境变量，claude 开箱即用
         if (code === 0 && apiKey) {
           const key = apiKey.trim();
           try {
             require('child_process').execSync(`setx ANTHROPIC_AUTH_TOKEN "${key}"`, { timeout: 5000, windowsHide: true });
             require('child_process').execSync(`setx ANTHROPIC_BASE_URL "https://api.deepseek.com/anthropic"`, { timeout: 5000, windowsHide: true });
+            require('child_process').execSync(`setx ANTHROPIC_MODEL "deepseek-v4-pro"`, { timeout: 5000, windowsHide: true });
           } catch (_) {}
         }
 
@@ -294,7 +300,7 @@ db.close();
             if (ccExe) require('child_process').exec(`start "" "${ccExe}"`);
             // cmd 终端：预置 env var，敲 claude 即用
             const banner = `echo 🎉 Claude Code 安装完成！ & echo. & echo 输入 claude 按回车即可使用`;
-            require('child_process').exec(`start cmd.exe /k "set ANTHROPIC_AUTH_TOKEN=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & ${banner} & mode con cols=80 lines=10"`);
+            require('child_process').exec(`start cmd.exe /k "set ANTHROPIC_AUTH_TOKEN=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & set ANTHROPIC_MODEL=deepseek-v4-pro & ${banner} & mode con cols=80 lines=10"`);
           } catch (_) {}
         }
 
