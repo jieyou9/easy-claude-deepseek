@@ -1,0 +1,58 @@
+{
+  "name": "claude-code-deployer",
+  "version": "1.0.0",
+  "description": "Claude Code 环境一键部署工具 - 全自动无感安装",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win --x64",
+    "build:dir": "electron-builder --win --x64 --dir"
+  },
+  "author": "Claude Code Deployer",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.claude-code-deployer.app",
+    "productName": "Claude Code Deployer",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "install.ps1",
+      "CC-Switch*.msi",
+      "cc-switch*.exe"
+    ],
+    "asarUnpack": ["install.ps1", "CC-Switch*.msi", "cc-switch*.exe"],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": null,
+      "publisherName": "Claude Code Deployer",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "uninstallDisplayName": "Claude Code Deployer"
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "iconv-lite": "^0.7.2"
+  }
+}

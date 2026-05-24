@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code 安装工具</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .spinner { width:16px;height:16px;border:2px solid rgba(255,255,255,.12);border-top-color:#F59E0B;border-radius:50%;animation:spin .7s linear infinite; }
+    .no-scrollbar::-webkit-scrollbar { display:none; }
+    .drag-region { -webkit-app-region:drag; }
+    .no-drag { -webkit-app-region:no-drag; }
+  </style>
+</head>
+<body class="bg-[#121212] text-[#E5E5E5] h-screen w-screen flex justify-center items-center overflow-hidden select-none">
+
+  <div class="w-[740px] h-[500px] bg-[#1A1A1A] rounded-2xl shadow-2xl border border-[#2D2D2D] flex flex-col overflow-hidden">
+
+    <!-- 标题栏 -->
+    <div class="drag-region h-11 border-b border-[#2D2D2D] bg-[#161616] flex items-center justify-between px-5 shrink-0">
+      <span class="text-[11px] text-[#666] font-mono tracking-[.15em]">CLAUDE CODE 安装工具</span>
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] text-[#555] font-mono mr-3">by解忧 v1.0</span>
+        <div class="no-drag w-3 h-3 rounded-full bg-[#27C93F] cursor-pointer" id="btnMinimize" title="最小化"></div>
+        <div class="no-drag w-3 h-3 rounded-full bg-[#FFBD2E] cursor-pointer" id="btnMaximize" title="最大化"></div>
+        <div class="no-drag w-3 h-3 rounded-full bg-[#FF5F56] cursor-pointer" id="btnClose" title="关闭"></div>
+      </div>
+    </div>
+
+    <!-- 主体 -->
+    <div class="flex-1 flex flex-col items-center px-10 py-5 overflow-hidden">
+
+      <!-- Logo -->
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D97706] to-[#CC5200] flex items-center justify-center font-bold text-white text-xl">C</div>
+        <div>
+          <h1 class="text-lg font-semibold text-white tracking-wide">Claude Code 一键安装</h1>
+          <p class="text-[11px] text-[#888] -mt-0.5">装好就能在终端用 claude 命令</p>
+        </div>
+      </div>
+
+      <!-- API Key 输入 -->
+      <div class="w-full max-w-[480px] mb-2">
+        <label class="text-[12px] text-[#aaa] block mb-1">你的 DeepSeek API Key <span class="text-[#666]">（必填）</span></label>
+        <input id="apiKeyInput" type="password"
+          class="w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#555] outline-none focus:border-[#D97706]"
+          placeholder="粘贴你的 DeepSeek API Key（sk-开头）">
+        <a class="text-[11px] text-[#D97706] hover:text-[#F59E0B] cursor-pointer mt-1 inline-block"
+           onclick="window.api?.openExternal('https://platform.deepseek.com/')">
+          🤔 没有？点这里去官网获取</a>
+      </div>
+
+      <!-- 按钮 -->
+      <button id="installBtn"
+        class="px-10 py-2.5 bg-gradient-to-r from-[#D97706] to-[#B45309] hover:from-[#EAB308] hover:to-[#D97706] text-white font-medium text-[14px] rounded-xl transition-all shadow-lg shadow-orange-950/25 active:scale-[.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed mb-3">
+        ☝️ 一键自动安装
+      </button>
+
+      <!-- 5 步进度 -->
+      <div class="w-full max-w-[480px] grid grid-cols-5 gap-1 text-center text-[11px] mb-2">
+        <div class="step-box flex flex-col items-center gap-1" data-step="0">
+          <span class="step-icon w-6 h-6 rounded-full bg-[#222] flex items-center justify-center text-[#555] text-xs">○</span>
+          <span class="step-label text-[#555]">检测环境</span>
+        </div>
+        <div class="step-box flex flex-col items-center gap-1" data-step="1">
+          <span class="step-icon w-6 h-6 rounded-full bg-[#222] flex items-center justify-center text-[#555] text-xs">○</span>
+          <span class="step-label text-[#555]">配置源</span>
+        </div>
+        <div class="step-box flex flex-col items-center gap-1" data-step="2">
+          <span class="step-icon w-6 h-6 rounded-full bg-[#222] flex items-center justify-center text-[#555] text-xs">○</span>
+          <span class="step-label text-[#555]">装工具</span>
+        </div>
+        <div class="step-box flex flex-col items-center gap-1" data-step="3">
+          <span class="step-icon w-6 h-6 rounded-full bg-[#222] flex items-center justify-center text-[#555] text-xs">○</span>
+          <span class="step-label text-[#555]">装 Claude</span>
+        </div>
+        <div class="step-box flex flex-col items-center gap-1" data-step="4">
+          <span class="step-icon w-6 h-6 rounded-full bg-[#222] flex items-center justify-center text-[#555] text-xs">○</span>
+          <span class="step-label text-[#555]">配 Key</span>
+        </div>
+      </div>
+
+      <!-- 日志区 -->
+      <div id="logArea" class="w-full max-w-[480px] flex-1 min-h-0 overflow-y-auto space-y-0.5 no-scrollbar select-text text-[12px] leading-[1.5]">
+        <div class="text-[#555] py-1">💡 点击上方按钮开始安装</div>
+      </div>
+      <div id="statusBar" class="w-full max-w-[480px] text-[11px] text-[#555] border-t border-[#222] pt-1 mt-1"></div>
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      const $ = id => document.getElementById(id);
+      const btn = $('installBtn');
+      const logArea = $('logArea');
+      const steps = document.querySelectorAll('.step-box');
+
+      const icons = ['○', '⚙', '📦', '📦', '🔑'];
+
+      // 窗口按钮
+      $('btnClose').addEventListener('click', () => window.api?.close());
+      $('btnMinimize').addEventListener('click', () => window.api?.minimize());
+      $('btnMaximize').addEventListener('click', () => window.api?.maximize());
+
+      // 更新步骤图标
+      function setStep(i, state, label) {
+        const box = steps[i]; if (!box) return;
+        const icon = box.querySelector('.step-icon');
+        const text = box.querySelector('.step-label');
+        if (state === 'doing') {
+          icon.innerHTML = '<div class="spinner"></div>';
+          icon.style.background = '#2D2D2D';
+          text.className = 'step-label text-[#F59E0B]';
+        } else if (state === 'done') {
+          icon.textContent = '✅';
+          icon.style.background = '#1a3a1a';
+          text.className = 'step-label text-[#10B981]';
+        } else if (state === 'fail') {
+          icon.textContent = '❌';
+          icon.style.background = '#3a1a1a';
+          text.className = 'step-label text-[#EF4444]';
+        }
+        if (label) text.textContent = label;
+      }
+
+      function addLog(msg, type) {
+        const div = document.createElement('div');
+        div.className = 'py-0.5';
+        div.style.animation = 'fadeIn .2s ease-out';
+        if (type === 'error') div.className += ' text-[#EF4444]';
+        else if (type === 'success' || type === 'big-success') div.className += ' text-[#10B981]';
+        else if (type === 'step') div.className += ' text-[#F59E0B]';
+        else div.className += ' text-[#aaa]';
+        div.textContent = msg.replace(/^\[.*?\]\s*/, '');
+        logArea.appendChild(div);
+        // 保留最近 200 条
+        while (logArea.children.length > 200) logArea.removeChild(logArea.firstChild);
+        // 自动滚到最新一行
+        requestAnimationFrame(() => { logArea.scrollTop = logArea.scrollHeight; });
+        // 把 npm 路径信息也显示在状态栏
+        if (msg.includes('找到 npm') || msg.includes('npm 已就绪')) {
+          statusBar.textContent = '📦 ' + msg.replace(/^\[.*?\]\s*/, '');
+        }
+      }
+
+      // 监听 install-step 事件 → 更新步骤
+      window.api?.onInstallStep(({ index, text }) => {
+        setStep(index, 'doing');
+        // 检测完成标记
+        if (text.includes('完成') || text.includes('安装成功') || text.includes('已配置')) {
+          setStep(index, 'done');
+        }
+      });
+
+      // 监听日志
+      window.api?.onLog(({ msg, type }) => {
+        addLog(msg, type);
+        // 根据日志类型自动推进步骤
+        const m = msg.replace(/^\[.*?\]\s*/, '');
+        if (m.includes('Node.js')) setStep(0, 'done');
+        if (m.includes('镜像源') || m.includes('配置完成')) setStep(1, 'done');
+        if (m.includes('cc-switch') || m.includes('网络工具')) setStep(2, 'done');
+        if (m.includes('Claude Code 安装成功')) setStep(3, 'done');
+        if (m.includes('API Key 已写入') || m.includes('全部完成')) setStep(4, 'done');
+        if (m.includes('安装成功') || m.includes('全部完成') || m.includes('已就绪')) {
+          btn.textContent = '✅ 安装完成';
+          btn.disabled = true;
+        }
+      });
+
+      // === 安装按钮 ===
+      async function startInstall() {
+        const apiKey = $('apiKeyInput').value.trim();
+        if (!apiKey) {
+          $('apiKeyInput').focus();
+          $('apiKeyInput').style.borderColor = '#EF4444';
+          setTimeout(() => $('apiKeyInput').style.borderColor = '#333', 2000);
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '⏳ 正在安装...';
+        logArea.innerHTML = '<div class="text-[#F59E0B] py-1">🚀 开始安装...</div>';
+
+        // 重置步骤
+        steps.forEach((_, i) => {
+          const icon = steps[i].querySelector('.step-icon');
+          icon.textContent = icons[i] || '○';
+          icon.style.background = '#222';
+        });
+
+        try {
+          const result = await window.api.runInstall(apiKey);
+          if (result.success) {
+            addLog('🎉 安装完成！在终端输入 claude 即可使用', 'big-success');
+            btn.textContent = '✅ 安装完成';
+          } else {
+            addLog('😅 安装遇到问题，可以重试或联系作者', 'error');
+            btn.textContent = '🔄 重试';
+            btn.disabled = false;
+          }
+        } catch (err) {
+          addLog('😅 出错了: ' + (err.message || '未知错误'), 'error');
+          btn.textContent = '🔄 重试';
+          btn.disabled = false;
+        }
+      }
+
+      btn.addEventListener('click', startInstall);
+
+      // 右键菜单
+      document.addEventListener('contextmenu', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+          e.preventDefault();
+          window.api?.showContextMenu();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
