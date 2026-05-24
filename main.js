@@ -156,7 +156,9 @@ function setupIPC() {
         try { fs.unlinkSync(tmpScript); } catch (_) {}
         log(code === 0 ? '[OK] 安装脚本执行完成 ✅' : `[ERR] 安装脚本退出码: ${code}`, code === 0 ? 'success' : 'error');
 
-        // 重新检测 node 路径（脚本可能中途装了 Node.js，PATH 未刷新）
+        // 从脚本输出中读取 node 路径（脚本装的 Node，它自己最清楚装了哪）
+        const npMatch = allOutput.match(/\[NODE_PATH\](.+)/);
+        if (npMatch) nodePath = npMatch[1].trim();
         if (!nodePath) {
           const knownPaths = [
             'C:\\Program Files\\nodejs\\node.exe',
