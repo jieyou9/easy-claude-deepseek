@@ -43,6 +43,11 @@
       "publisherName": "easy-claude-deepseek",
       "requestedExecutionLevel": "requireAdministrator"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "jieyou9",
+      "repo": "easy-claude-deepseek"
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
