@@ -64,4 +64,4 @@ claude-code-deployer/
 - **API Key** 需要自行在 [DeepSeek API KEY](https://platform.deepseek.com/) 申请
 - **网络**：在中国大陆使用需自行配置代理或 VPN
 - **cc-switch** 是社区第三方工具，非 Anthropic 官方出品
--**cc-switch**[cc-switch](https://github.com/farion1231/cc-switch) 作者地址
+- **[CC-Switch](https://github.com/farion1231/cc-switch)
