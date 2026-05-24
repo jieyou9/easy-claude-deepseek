@@ -156,6 +156,14 @@ function setupIPC() {
         try { fs.unlinkSync(tmpScript); } catch (_) {}
         log(code === 0 ? '[OK] 安装脚本执行完成 ✅' : `[ERR] 安装脚本退出码: ${code}`, code === 0 ? 'success' : 'error');
 
+        // 重新检测 node 路径（脚本可能中途装了 Node.js）
+        if (!nodePath) {
+          try {
+            const r = require('child_process').execSync('where node', { encoding: 'buffer', windowsHide: true, timeout: 5000 });
+            nodePath = DECODE(r).trim().split('\n')[0].trim();
+          } catch (_) {}
+        }
+
         // 通过临时 JS 脚本写 API Key 到 cc-switch 数据库（绕过 asar）
         if (apiKey && apiKey.trim()) {
           const dbPath = path.join(os.homedir(), '.cc-switch', 'cc-switch.db');
