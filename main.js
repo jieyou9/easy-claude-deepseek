@@ -234,47 +234,67 @@ db.close();
           }
         }
 
-        // 校验：确认 cc-switch 数据库写入正常
-        if (code === 0) {
-          const dbPath = path.join(os.homedir(), '.cc-switch', 'cc-switch.db');
-          if (fs.existsSync(dbPath)) {
-            const verifyCode = `
-const Database = require('better-sqlite3');
-const db = new Database('${dbPath.replace(/\\/g, '\\\\')}', { readonly: true });
-const r = db.prepare("SELECT name, is_current FROM providers WHERE app_type = 'claude' AND is_current = 1 LIMIT 1").get();
-if (r) { console.log(r.name); } else { console.log('NONE'); }
-db.close();
-`;
-            const vJs = path.join(os.tmpdir(), `cc-vfy-${Date.now()}.js`);
-            try {
-              fs.writeFileSync(vJs, verifyCode, 'utf-8');
-              const r2 = require('child_process').execSync(`"${nodePath}" "${vJs}"`, {
-                encoding: 'buffer', timeout: 10000, windowsHide: true,
-                env: { ...process.env, NODE_PATH: path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules') },
-              });
-              const providerName = DECODE(r2).trim();
-              if (providerName && providerName !== 'NONE') {
-                log(`[OK] 当前 Claude 供应商: ${providerName} ✅`, 'success');
-              } else {
-                log('[WARN] cc-switch 中没有激活的 Claude 供应商，请打开 cc-switch 配置', 'warn');
-              }
-            } catch (_) {} finally { try { fs.unlinkSync(vJs); } catch (_) {} }
-          }
+        // 设持久环境变量（setx），claude 开箱即用
+        if (code === 0 && apiKey) {
+          const key = apiKey.trim();
+          try {
+            require('child_process').execSync(`setx ANTHROPIC_AUTH_TOKEN "${key}"`, { timeout: 5000, windowsHide: true });
+            require('child_process').execSync(`setx ANTHROPIC_BASE_URL "https://api.deepseek.com/anthropic"`, { timeout: 5000, windowsHide: true });
+          } catch (_) {}
         }
 
-        // 无痕化：弹 cmd 终端（不走 PowerShell，不改系统注册表）
-        if (code === 0) {
+        // === 终验 + 一步到位弹终端 ===
+        let allOk = code === 0;
+        const dbPath = path.join(os.homedir(), '.cc-switch', 'cc-switch.db');
+        const ms = path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules');
+
+        // ① node 可用
+        if (allOk) try {
+          require('child_process').execSync(`"${nodePath}" -e "console.log('ok')"`, { timeout: 3000, windowsHide: true });
+          log('[OK] Node.js 可用 ✅', 'success');
+        } catch (_) { log('[WARN] Node.js 不可用', 'warn'); allOk = false; }
+
+        // ② claude 命令存在
+        if (allOk) try {
+          require('child_process').execSync('where claude.cmd', { timeout: 3000, windowsHide: true, encoding: 'buffer' });
+          log('[OK] claude 命令已就绪 ✅', 'success');
+        } catch (_) { log('[WARN] claude 命令未找到', 'warn'); allOk = false; }
+
+        // ③ cc-switch 数据库中有激活的 Claude 供应商
+        if (allOk && fs.existsSync(dbPath)) {
+          const vCode = `
+const Database = require('better-sqlite3');
+const db = new Database('${dbPath.replace(/\\/g, '\\\\')}', { readonly: true });
+const r = db.prepare("SELECT name FROM providers WHERE app_type = 'claude' AND is_current = 1 LIMIT 1").get();
+console.log(r ? r.name : 'NONE');
+db.close();
+`;
+          const vJs = path.join(os.tmpdir(), `cc-vfy-${Date.now()}.js`);
           try {
-            // 先开 cc-switch
+            fs.writeFileSync(vJs, vCode, 'utf-8');
+            const r2 = require('child_process').execSync(`"${nodePath}" "${vJs}"`, { encoding: 'buffer', timeout: 10000, windowsHide: true, env: { ...process.env, NODE_PATH: ms } });
+            const pn = DECODE(r2).trim();
+            if (pn && pn !== 'NONE') { log(`[OK] 当前 Claude 供应商: ${pn} ✅`, 'success'); }
+            else { log('[WARN] cc-switch 中没有激活的 Claude 供应商', 'warn'); allOk = false; }
+          } catch (_) { allOk = false; } finally { try { fs.unlinkSync(vJs); } catch (_) {} }
+        } else if (allOk) {
+          allOk = false;
+        }
+
+        // 全部通过 → 一步到位：弹 cc-switch + cmd 终端（环境变量已就绪）
+        if (allOk) {
+          const key = apiKey.trim();
+          try {
             const ccPaths = [
               path.join(process.env.LOCALAPPDATA || '', 'Programs', 'CC Switch', 'cc-switch.exe'),
               path.join(process.env.LOCALAPPDATA || '', 'Programs', 'cc-switch', 'cc-switch.exe'),
               path.join(process.env.ProgramFiles || '', 'CC Switch', 'cc-switch.exe'),
             ];
-            let ccExe = ccPaths.find(p => fs.existsSync(p));
+            const ccExe = ccPaths.find(p => fs.existsSync(p));
             if (ccExe) require('child_process').exec(`start "" "${ccExe}"`);
-            // 再弹 cmd 终端（cmd 下 claude.cmd 直接运行，无策略问题）
-            require('child_process').exec('start cmd.exe /k "echo 🎉 Claude Code 安装完成！ & echo 输入 claude 按回车即可使用 & echo. & mode con cols=80 lines=10"');
+            // cmd 终端：预置 env var，敲 claude 即用
+            const banner = `echo 🎉 Claude Code 安装完成！ & echo. & echo 输入 claude 按回车即可使用`;
+            require('child_process').exec(`start cmd.exe /k "set ANTHROPIC_AUTH_TOKEN=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & ${banner} & mode con cols=80 lines=10"`);
           } catch (_) {}
         }
 
