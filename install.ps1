@@ -16,7 +16,8 @@ $ErrorActionPreference = "Continue"
 chcp 65001 > $null
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 无痕化：不改系统注册表，后面用 cmd 终端绕过 PowerShell 策略
+# 允许当前用户运行本地 ps1 脚本（只写 HKCU，不碰 HKLM，无痕化）
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force 2>$null
 
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "🚀 开始全自动配置 Claude Code 运行环境..." -ForegroundColor Cyan
