@@ -181,15 +181,37 @@ const Database = require('better-sqlite3');
 const db = new Database('${dbPath.replace(/\\/g, '\\\\')}', { readonly: false });
 const { randomUUID } = require('crypto');
 
-// 先找已有 Claude 供应商
-let r = db.prepare("SELECT id, settings_config, name FROM providers WHERE app_type = 'claude' LIMIT 1").get();
-if (!r) {
-  // 没有则创建 DeepSeek 供应商（完整字段）
+// 1. 清掉其他 Claude 供应商的 is_current
+db.prepare("UPDATE providers SET is_current = 0 WHERE app_type = 'claude'").run();
+
+// 2. 找是否已有 DeepSeek 供应商
+const ds = db.prepare("SELECT id FROM providers WHERE name = 'DeepSeek' LIMIT 1").get();
+if (ds) {
+  // 已有 → 更新配置 + 激活
+  const settings = {
+    env: {
+      ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
+      ANTHROPIC_API_KEY: '${safeKey}',
+      ANTHROPIC_AUTH_TOKEN: '${safeKey}',
+      ANTHROPIC_MODEL: 'deepseek-v4-pro',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro',
+    },
+    includeCoAuthoredBy: false,
+  };
+  const meta = { commonConfigEnabled: true, endpointAutoSelect: true, apiFormat: 'anthropic' };
+  db.prepare("UPDATE providers SET settings_config = ?, meta = ?, is_current = 1 WHERE id = ?")
+    .run(JSON.stringify(settings), JSON.stringify(meta), ds.id);
+  console.log('OK');
+} else {
+  // 没有 → 新建 DeepSeek 供应商
   const id = randomUUID();
   const now = Date.now();
   const settings = {
     env: {
       ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
+      ANTHROPIC_API_KEY: '${safeKey}',
       ANTHROPIC_AUTH_TOKEN: '${safeKey}',
       ANTHROPIC_MODEL: 'deepseek-v4-pro',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
@@ -201,19 +223,6 @@ if (!r) {
   const meta = { commonConfigEnabled: true, endpointAutoSelect: true, apiFormat: 'anthropic' };
   db.prepare("INSERT INTO providers (id, app_type, name, settings_config, website_url, category, created_at, icon, icon_color, meta, is_current, cost_multiplier) VALUES (?, 'claude', 'DeepSeek', ?, 'https://platform.deepseek.com', 'cn_official', ?, 'deepseek', '#1E88E5', ?, 1, '1.0')")
     .run(id, JSON.stringify(settings), now, JSON.stringify(meta));
-  console.log('OK');
-} else {
-  // 更新已有供应商的 env + 设 is_current=1
-  let c = JSON.parse(r.settings_config || '{}');
-  if (!c.env) c.env = {};
-  c.env.ANTHROPIC_AUTH_TOKEN = '${safeKey}';
-  c.env.ANTHROPIC_BASE_URL = c.env.ANTHROPIC_BASE_URL || 'https://api.deepseek.com/anthropic';
-  c.env.ANTHROPIC_MODEL = c.env.ANTHROPIC_MODEL || 'deepseek-v4-pro';
-  c.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = c.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'deepseek-v4-flash';
-  c.env.ANTHROPIC_DEFAULT_SONNET_MODEL = c.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'deepseek-v4-pro';
-  c.env.ANTHROPIC_DEFAULT_OPUS_MODEL = c.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'deepseek-v4-pro';
-  c.includeCoAuthoredBy = c.includeCoAuthoredBy !== undefined ? c.includeCoAuthoredBy : false;
-  db.prepare("UPDATE providers SET settings_config = ?, is_current = 1 WHERE id = ?").run(JSON.stringify(c), r.id);
   console.log('OK');
 }
 db.close();
@@ -245,9 +254,9 @@ db.close();
         if (code === 0 && apiKey) {
           const key = apiKey.trim();
           try {
+            require('child_process').execSync(`setx ANTHROPIC_API_KEY "${key}"`, { timeout: 5000, windowsHide: true });
             require('child_process').execSync(`setx ANTHROPIC_AUTH_TOKEN "${key}"`, { timeout: 5000, windowsHide: true });
             require('child_process').execSync(`setx ANTHROPIC_BASE_URL "https://api.deepseek.com/anthropic"`, { timeout: 5000, windowsHide: true });
-            require('child_process').execSync(`setx ANTHROPIC_MODEL "deepseek-v4-pro"`, { timeout: 5000, windowsHide: true });
           } catch (_) {}
         }
 
@@ -268,12 +277,12 @@ db.close();
           log('[OK] claude 命令已就绪 ✅', 'success');
         } catch (_) { log('[WARN] claude 命令未找到', 'warn'); allOk = false; }
 
-        // ③ cc-switch 数据库中有激活的 Claude 供应商
+        // ③ cc-switch 数据库中 DeepSeek 已激活
         if (allOk && fs.existsSync(dbPath)) {
           const vCode = `
 const Database = require('better-sqlite3');
 const db = new Database('${dbPath.replace(/\\/g, '\\\\')}', { readonly: true });
-const r = db.prepare("SELECT name FROM providers WHERE app_type = 'claude' AND is_current = 1 LIMIT 1").get();
+const r = db.prepare("SELECT name FROM providers WHERE name = 'DeepSeek' AND is_current = 1 LIMIT 1").get();
 console.log(r ? r.name : 'NONE');
 db.close();
 `;
@@ -302,7 +311,7 @@ db.close();
             if (ccExe) require('child_process').exec(`start "" "${ccExe}"`);
             // cmd 终端：预置 env var，敲 claude 即用
             const banner = `echo 🎉 Claude Code 安装完成！ & echo. & echo 输入 claude 按回车即可使用`;
-            require('child_process').exec(`start cmd.exe /k "set ANTHROPIC_AUTH_TOKEN=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & set ANTHROPIC_MODEL=deepseek-v4-pro & ${banner} & mode con cols=80 lines=10"`);
+            require('child_process').exec(`start cmd.exe /k "set ANTHROPIC_API_KEY=${key} & set ANTHROPIC_AUTH_TOKEN=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & ${banner} & mode con cols=80 lines=10"`);
           } catch (_) {}
         }
 
