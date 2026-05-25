@@ -143,7 +143,8 @@ if ($CcInstaller -ne "" -and (Test-Path $CcInstaller)) {
     $name = Split-Path $CcInstaller -Leaf
     Write-Host "⏳ 安装 cc-switch: $name ..." -ForegroundColor Yellow
     if ($CcInstaller -like "*.msi") {
-        Start-Process msiexec.exe -ArgumentList "/i `"$CcInstaller`" /quiet /norestart" -Wait
+        Write-Host "  ⏳ 正在安装（请等待进度条走完）..." -ForegroundColor Yellow
+        Start-Process msiexec.exe -ArgumentList "/i `"$CcInstaller`" /passive /norestart" -Wait
     } else {
         Start-Process $CcInstaller -ArgumentList "/S" -Wait
     }
