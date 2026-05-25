@@ -216,6 +216,30 @@ if (-not $ccInstalled) {
     }
 }
 
+# 3.5 安装 Git for Windows（Claude Code 需要 bash 环境）
+if (-not (Get-Command git -ErrorAction SilentlyContinue) -and -not (Test-Path "$env:ProgramFiles\Git\bin\bash.exe")) {
+    Write-Host "⏳ 未检测到 Git，正在安装 Git for Windows..." -ForegroundColor Yellow
+    $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.48.1.windows.1/Git-2.48.1-64-bit.exe"
+    $gitInstaller = "$env:TEMP\git-installer.exe"
+    try {
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($gitUrl, $gitInstaller)
+        Write-Host "✅ Git 下载完成，正在静默安装..." -ForegroundColor Yellow
+        Start-Process -Wait -FilePath $gitInstaller -ArgumentList "/SILENT /VERYSILENT /NORESTART /COMPONENTS=`"git,assoc_sh`"" -NoNewWindow
+        # 刷新 PATH
+        $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+        if (Get-Command git -ErrorAction SilentlyContinue) {
+            Write-Host "✅ Git for Windows 安装成功 ✅" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "⚠️ Git 安装失败（不影响，用户需手动安装）" -ForegroundColor Yellow
+    }
+    try { Remove-Item $gitInstaller -Force -ErrorAction SilentlyContinue } catch {}
+} elseif (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    # 装了但不在 PATH，设环境变量给 Claude Code
+    $env:CLAUDE_CODE_GIT_BASH_PATH = "$env:ProgramFiles\Git\bin\bash.exe"
+}
+
 # 4. 安装 Claude Code
 Write-Host "⏳ 正在全局安装 Claude Code (@anthropic-ai/claude-code)..." -ForegroundColor Yellow
 & $npmExe install -g @anthropic-ai/claude-code
