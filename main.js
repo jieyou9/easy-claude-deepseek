@@ -210,12 +210,18 @@ if (ds) {
     .run(dsId, JSON.stringify(settings), Date.now(), JSON.stringify(meta));
 }
 
-// 3. 写 settings.json
+// 3. 写 settings.json（匹配手工配置 + 开机自启）
 const settingsPath = require('path').join(require('os').homedir(), '.cc-switch', 'settings.json');
 try {
   let sf = require('fs').existsSync(settingsPath) ? JSON.parse(require('fs').readFileSync(settingsPath, 'utf-8')) : {};
-  sf.currentProviderClaude = dsId;
+  sf.showInTray = true;
+  sf.minimizeToTrayOnClose = true;
+  sf.launchOnStartup = true;
+  sf.silentStartup = true;
+  sf.firstRunNoticeConfirmed = true;
   sf.commonConfigConfirmed = true;
+  sf.currentProviderClaude = dsId;
+  sf.enableLocalProxy = false;
   require('fs').writeFileSync(settingsPath, JSON.stringify(sf, null, 2), 'utf-8');
 } catch (_) {}
 
