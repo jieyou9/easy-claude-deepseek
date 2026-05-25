@@ -207,8 +207,16 @@ if (ds) {
     .run(randomUUID(), JSON.stringify(settings), Date.now(), JSON.stringify(meta));
 }
 
-// 3. 启用代理（等价于点 cc-switch 的"启用"）
+// 3. 启用代理
 db.prepare("UPDATE proxy_config SET proxy_enabled = 1, enabled = 1 WHERE app_type = 'claude'").run();
+
+// 4. 添加 DeepSeek 模型显示名
+const ms = [
+  ['deepseek-v4-pro', 'DeepSeek V4 Pro', '2', '8', '0.50', '2.50'],
+  ['deepseek-v4-flash', 'DeepSeek V4 Flash', '0.50', '2', '0.10', '0.60'],
+];
+const ins = db.prepare("INSERT OR REPLACE INTO model_pricing (model_id, display_name, input_cost_per_million, output_cost_per_million, cache_read_cost_per_million, cache_creation_cost_per_million) VALUES (?, ?, ?, ?, ?, ?)");
+for (const m of ms) ins.run(...m);
 
 console.log('OK');
 db.close();
