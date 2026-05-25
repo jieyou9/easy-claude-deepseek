@@ -188,27 +188,36 @@ db.prepare("UPDATE providers SET is_current = 0 WHERE app_type = 'claude'").run(
 const settings = {
   env: {
     ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
-    ANTHROPIC_API_KEY: '${safeKey}',
     ANTHROPIC_AUTH_TOKEN: '${safeKey}',
     ANTHROPIC_MODEL: 'deepseek-v4-pro',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro',
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro[1M]',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro[1M]',
+    ANTHROPIC_DEFAULT_SONNET_MODEL_NAME: 'deepseek-v4-pro',
+    ANTHROPIC_DEFAULT_OPUS_MODEL_NAME: 'deepseek-v4-pro',
   },
   includeCoAuthoredBy: false,
 };
 const meta = { commonConfigEnabled: true, endpointAutoSelect: true, apiFormat: 'anthropic' };
+const uuid = randomUUID();
 const ds = db.prepare("SELECT id FROM providers WHERE name = 'DeepSeek' LIMIT 1").get();
+const dsId = ds ? ds.id : uuid;
 if (ds) {
   db.prepare("UPDATE providers SET settings_config = ?, meta = ?, is_current = 1 WHERE id = ?")
     .run(JSON.stringify(settings), JSON.stringify(meta), ds.id);
 } else {
   db.prepare("INSERT INTO providers (id, app_type, name, settings_config, website_url, category, created_at, icon, icon_color, meta, is_current, cost_multiplier) VALUES (?, 'claude', 'DeepSeek', ?, 'https://platform.deepseek.com', 'cn_official', ?, 'deepseek', '#1E88E5', ?, 1, '1.0')")
-    .run(randomUUID(), JSON.stringify(settings), Date.now(), JSON.stringify(meta));
+    .run(dsId, JSON.stringify(settings), Date.now(), JSON.stringify(meta));
 }
 
-// 3. 启用代理
-db.prepare("UPDATE proxy_config SET proxy_enabled = 1, enabled = 1 WHERE app_type = 'claude'").run();
+// 3. 写 settings.json（设置 currentProviderClaude）
+const settingsPath = require('path').join(require('os').homedir(), '.cc-switch', 'settings.json');
+try {
+  let sf = require('fs').existsSync(settingsPath) ? JSON.parse(require('fs').readFileSync(settingsPath, 'utf-8')) : {};
+  sf.currentProviderClaude = dsId;
+  sf.commonConfigConfirmed = true;
+  require('fs').writeFileSync(settingsPath, JSON.stringify(sf, null, 2), 'utf-8');
+} catch (_) {}
 
 // 4. 添加 DeepSeek 模型显示名
 const ms = [
