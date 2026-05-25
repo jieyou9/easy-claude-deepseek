@@ -184,47 +184,33 @@ const { randomUUID } = require('crypto');
 // 1. 清掉其他 Claude 供应商的 is_current
 db.prepare("UPDATE providers SET is_current = 0 WHERE app_type = 'claude'").run();
 
-// 2. 找是否已有 DeepSeek 供应商
+// 2. 配置 DeepSeek 供应商
+const settings = {
+  env: {
+    ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
+    ANTHROPIC_API_KEY: '${safeKey}',
+    ANTHROPIC_AUTH_TOKEN: '${safeKey}',
+    ANTHROPIC_MODEL: 'deepseek-v4-pro',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro',
+  },
+  includeCoAuthoredBy: false,
+};
+const meta = { commonConfigEnabled: true, endpointAutoSelect: true, apiFormat: 'anthropic' };
 const ds = db.prepare("SELECT id FROM providers WHERE name = 'DeepSeek' LIMIT 1").get();
 if (ds) {
-  // 已有 → 更新配置 + 激活
-  const settings = {
-    env: {
-      ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
-      ANTHROPIC_API_KEY: '${safeKey}',
-      ANTHROPIC_AUTH_TOKEN: '${safeKey}',
-      ANTHROPIC_MODEL: 'deepseek-v4-pro',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro',
-    },
-    includeCoAuthoredBy: false,
-  };
-  const meta = { commonConfigEnabled: true, endpointAutoSelect: true, apiFormat: 'anthropic' };
   db.prepare("UPDATE providers SET settings_config = ?, meta = ?, is_current = 1 WHERE id = ?")
     .run(JSON.stringify(settings), JSON.stringify(meta), ds.id);
-  console.log('OK');
 } else {
-  // 没有 → 新建 DeepSeek 供应商
-  const id = randomUUID();
-  const now = Date.now();
-  const settings = {
-    env: {
-      ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
-      ANTHROPIC_API_KEY: '${safeKey}',
-      ANTHROPIC_AUTH_TOKEN: '${safeKey}',
-      ANTHROPIC_MODEL: 'deepseek-v4-pro',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro',
-    },
-    includeCoAuthoredBy: false,
-  };
-  const meta = { commonConfigEnabled: true, endpointAutoSelect: true, apiFormat: 'anthropic' };
   db.prepare("INSERT INTO providers (id, app_type, name, settings_config, website_url, category, created_at, icon, icon_color, meta, is_current, cost_multiplier) VALUES (?, 'claude', 'DeepSeek', ?, 'https://platform.deepseek.com', 'cn_official', ?, 'deepseek', '#1E88E5', ?, 1, '1.0')")
-    .run(id, JSON.stringify(settings), now, JSON.stringify(meta));
-  console.log('OK');
+    .run(randomUUID(), JSON.stringify(settings), Date.now(), JSON.stringify(meta));
 }
+
+// 3. 启用代理（等价于点 cc-switch 的"启用"）
+db.prepare("UPDATE proxy_config SET proxy_enabled = 1, enabled = 1 WHERE app_type = 'claude'").run();
+
+console.log('OK');
 db.close();
 `;
             const globalNodeModules = path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules');
@@ -319,9 +305,10 @@ db.close();
             ];
             const ccExe = ccPaths.find(p => fs.existsSync(p));
             if (ccExe) require('child_process').exec(`start "" "${ccExe}"`);
-            // cmd 终端：预置 env var，敲 claude 即用
+            // cmd 终端：预置 env var + PATH，敲 claude 即用
+            const npmDir = path.join(os.homedir(), 'AppData', 'Roaming', 'npm');
             const banner = `echo 🎉 Claude Code 安装完成！ & echo. & echo 输入 claude 按回车即可使用`;
-            require('child_process').exec(`start cmd.exe /k "set ANTHROPIC_API_KEY=${key} & set ANTHROPIC_AUTH_TOKEN=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & ${banner} & mode con cols=80 lines=10"`);
+            require('child_process').exec(`start cmd.exe /k "set PATH=${npmDir};%PATH% & set ANTHROPIC_API_KEY=${key} & set ANTHROPIC_AUTH_TOKEN=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & ${banner} & mode con cols=80 lines=10"`);
           } catch (_) {}
         }
 
