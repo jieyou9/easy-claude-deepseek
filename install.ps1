@@ -129,12 +129,6 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 Write-Host "⚡ 正在优化 npm 下载速度（切换至国内镜像源）..." -ForegroundColor Cyan
 & $npmExe config set registry https://registry.npmmirror.com
 
-# 2.5 预装 better-sqlite3（给后续 API Key 写入用）
-Write-Host "⏳ 预装数据库模块 better-sqlite3..." -ForegroundColor Yellow
-& $npmExe install -g better-sqlite3 2>$null
-if ($LASTEXITCODE -eq 0) { Write-Host "✅ better-sqlite3 已就绪" -ForegroundColor Green }
-else { Write-Host "⚠️ better-sqlite3 未安装（API Key 无法自动写入）" -ForegroundColor Yellow }
-
 # 3. 安装 cc-switch
 $ccInstalled = $false
 

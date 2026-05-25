@@ -171,157 +171,59 @@ function setupIPC() {
           } catch (_) {}
         }
 
-        // 通过临时 JS 脚本写 API Key 到 cc-switch 数据库（绕过 asar）
-        if (apiKey && apiKey.trim()) {
-          const dbPath = path.join(os.homedir(), '.cc-switch', 'cc-switch.db');
-          if (fs.existsSync(dbPath)) {
-            const safeKey = apiKey.trim().replace(/'/g, "\\'");
-            const jsCode = `
-const Database = require('better-sqlite3');
-const db = new Database('${dbPath.replace(/\\/g, '\\\\')}', { readonly: false });
-const { randomUUID } = require('crypto');
+        // 通过 ccswitch:// DeepLink 协议配置 DeepSeek（原生方式）
+        if (code === 0 && apiKey && apiKey.trim()) {
+          const key = apiKey.trim();
+          const ccSearchPaths = [
+            path.join(process.env.LOCALAPPDATA || '', 'Programs', 'CC Switch', 'cc-switch.exe'),
+            path.join(process.env.LOCALAPPDATA || '', 'Programs', 'cc-switch', 'cc-switch.exe'),
+            path.join(process.env.ProgramFiles || '', 'CC Switch', 'cc-switch.exe'),
+          ];
+          const ccExe = ccSearchPaths.find(p => fs.existsSync(p));
 
-// 1. 清掉其他 Claude 供应商的 is_current
-db.prepare("UPDATE providers SET is_current = 0 WHERE app_type = 'claude'").run();
+          if (ccExe) {
+            // 构造 ccswitch://v1/import DeepLink URL
+            const params = new URLSearchParams({
+              resource: 'provider',
+              app: 'claude',
+              name: 'DeepSeek',
+              endpoint: 'https://api.deepseek.com/anthropic',
+              apiKey: key,
+              model: 'deepseek-v4-pro',
+              haikuModel: 'deepseek-v4-flash',
+              sonnetModel: 'deepseek-v4-pro',
+              opusModel: 'deepseek-v4-pro',
+              icon: 'deepseek',
+              homepage: 'https://platform.deepseek.com',
+              enabled: 'true',
+            });
+            const deeplink = `ccswitch://v1/import?${params.toString()}`;
 
-// 2. 配置 DeepSeek 供应商
-const settings = {
-  env: {
-    ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
-    ANTHROPIC_AUTH_TOKEN: '${safeKey}',
-    ANTHROPIC_MODEL: 'deepseek-v4-pro',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro[1M]',
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro[1M]',
-    ANTHROPIC_DEFAULT_SONNET_MODEL_NAME: 'deepseek-v4-pro',
-    ANTHROPIC_DEFAULT_OPUS_MODEL_NAME: 'deepseek-v4-pro',
-  },
-  includeCoAuthoredBy: false,
-};
-const meta = { commonConfigEnabled: true, endpointAutoSelect: true, apiFormat: 'anthropic' };
-const uuid = randomUUID();
-const ds = db.prepare("SELECT id FROM providers WHERE name = 'DeepSeek' LIMIT 1").get();
-const dsId = ds ? ds.id : uuid;
-if (ds) {
-  db.prepare("UPDATE providers SET settings_config = ?, meta = ?, is_current = 1 WHERE id = ?")
-    .run(JSON.stringify(settings), JSON.stringify(meta), ds.id);
-} else {
-  db.prepare("INSERT INTO providers (id, app_type, name, settings_config, website_url, category, created_at, icon, icon_color, meta, is_current, cost_multiplier) VALUES (?, 'claude', 'DeepSeek', ?, 'https://platform.deepseek.com', 'cn_official', ?, 'deepseek', '#1E88E5', ?, 1, '1.0')")
-    .run(dsId, JSON.stringify(settings), Date.now(), JSON.stringify(meta));
-}
-
-// 3. 写 settings.json（匹配手工配置 + 开机自启）
-const settingsPath = require('path').join(require('os').homedir(), '.cc-switch', 'settings.json');
-try {
-  let sf = require('fs').existsSync(settingsPath) ? JSON.parse(require('fs').readFileSync(settingsPath, 'utf-8')) : {};
-  sf.showInTray = true;
-  sf.minimizeToTrayOnClose = true;
-  sf.launchOnStartup = true;
-  sf.silentStartup = true;
-  sf.firstRunNoticeConfirmed = true;
-  sf.commonConfigConfirmed = true;
-  sf.currentProviderClaude = dsId;
-  sf.enableLocalProxy = false;
-  require('fs').writeFileSync(settingsPath, JSON.stringify(sf, null, 2), 'utf-8');
-} catch (_) {}
-
-// 4. 添加 DeepSeek 模型显示名
-const ms = [
-  ['deepseek-v4-pro', 'DeepSeek V4 Pro', '2', '8', '0.50', '2.50'],
-  ['deepseek-v4-flash', 'DeepSeek V4 Flash', '0.50', '2', '0.10', '0.60'],
-];
-const ins = db.prepare("INSERT OR REPLACE INTO model_pricing (model_id, display_name, input_cost_per_million, output_cost_per_million, cache_read_cost_per_million, cache_creation_cost_per_million) VALUES (?, ?, ?, ?, ?, ?)");
-for (const m of ms) ins.run(...m);
-
-console.log('OK');
-db.close();
-`;
-            const globalNodeModules = path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules');
-            const tmpJs = path.join(os.tmpdir(), `cc-apikey-${Date.now()}.js`);
             try {
-              fs.writeFileSync(tmpJs, jsCode, 'utf-8');
-              const r = require('child_process').execSync(`"${nodePath}" "${tmpJs}"`, {
-                encoding: 'buffer', timeout: 15000, windowsHide: true,
-                env: { ...process.env, NODE_PATH: globalNodeModules },
-              });
-              if (DECODE(r).trim() === 'OK') {
-                log('[OK] API Key 已写入 cc-switch ✅', 'success');
-              } else {
-                log('[WARN] 未找到 cc-switch 中的 Claude 配置', 'warn');
-              }
+              // 先启动 cc-switch 初始化数据库
+              require('child_process').exec(`start "" "${ccExe}"`);
+              log('[INFO] 正在启动 cc-switch...', 'info');
+              // 等 3 秒确保启动完成
+              require('child_process').execSync('ping 127.0.0.1 -n 4 >nul', { timeout: 5000, windowsHide: true });
+              // 打开 DeepLink 触发导入
+              require('child_process').exec(`start "" "${deeplink}"`);
+              log('[OK] 已通过 DeepLink 触发 cc-switch 导入 ✅', 'success');
+              log('💡 请在 cc-switch 弹窗中确认导入 DeepSeek 配置', 'step');
             } catch (e) {
-              log(`[WARN] 写入 API Key 失败: ${e.message}`, 'warn');
-            } finally {
-              try { fs.unlinkSync(tmpJs); } catch (_) {}
+              log(`[WARN] cc-switch DeepLink 触发失败: ${e.message}`, 'warn');
+              log('💡 请手动打开 cc-switch → 添加供应商 → 选择 DeepSeek → 填入 API Key', 'step');
             }
           } else {
-            log('[WARN] 未找到 cc-switch 数据库（cc-switch 未安装）', 'warn');
+            log('[WARN] 未找到 cc-switch，请确认安装成功', 'warn');
           }
         }
 
-        // === 终验 + 一步到位弹终端 ===
-        let allOk = code === 0;
-        const dbPath = path.join(os.homedir(), '.cc-switch', 'cc-switch.db');
-        const ms = path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules');
-
-        // ① node 可用
-        if (allOk) try {
-          require('child_process').execSync(`"${nodePath}" -e "console.log('ok')"`, { timeout: 3000, windowsHide: true });
-          log('[OK] Node.js 可用 ✅', 'success');
-        } catch (_) { log('[WARN] Node.js 不可用', 'warn'); allOk = false; }
-
-        // ② claude 命令存在
-        if (allOk) {
-          const claudePaths = [
-            path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd'),
-            path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude'),
-            'C:\\Program Files\\nodejs\\claude.cmd',
-          ];
-          const foundClaude = claudePaths.find(p => fs.existsSync(p));
-          if (foundClaude) {
-            log('[OK] claude 命令已就绪 ✅', 'success');
-          } else try {
-            require('child_process').execSync('where claude', { timeout: 3000, windowsHide: true, encoding: 'buffer' });
-            log('[OK] claude 命令已就绪 ✅', 'success');
-          } catch (_) { log('[WARN] claude 命令未找到', 'warn'); allOk = false; }
-        }
-
-        // ③ cc-switch 数据库中 DeepSeek 已激活
-        if (allOk && fs.existsSync(dbPath)) {
-          const vCode = `
-const Database = require('better-sqlite3');
-const db = new Database('${dbPath.replace(/\\/g, '\\\\')}', { readonly: true });
-const r = db.prepare("SELECT name FROM providers WHERE name = 'DeepSeek' AND is_current = 1 LIMIT 1").get();
-console.log(r ? r.name : 'NONE');
-db.close();
-`;
-          const vJs = path.join(os.tmpdir(), `cc-vfy-${Date.now()}.js`);
+        // 安装完成 → 弹终端（只设 PATH，不再设 ANTHROPIC_* 环境变量）
+        if (code === 0) {
           try {
-            fs.writeFileSync(vJs, vCode, 'utf-8');
-            const r2 = require('child_process').execSync(`"${nodePath}" "${vJs}"`, { encoding: 'buffer', timeout: 10000, windowsHide: true, env: { ...process.env, NODE_PATH: ms } });
-            const pn = DECODE(r2).trim();
-            if (pn && pn !== 'NONE') { log(`[OK] 当前 Claude 供应商: ${pn} ✅`, 'success'); }
-            else { log('[WARN] cc-switch 中没有激活的 Claude 供应商', 'warn'); allOk = false; }
-          } catch (_) { allOk = false; } finally { try { fs.unlinkSync(vJs); } catch (_) {} }
-        } else if (allOk) {
-          allOk = false;
-        }
-
-        // 全部通过 → 一步到位：弹 cc-switch + cmd 终端（环境变量已就绪）
-        if (allOk) {
-          const key = apiKey.trim();
-          try {
-            const ccPaths = [
-              path.join(process.env.LOCALAPPDATA || '', 'Programs', 'CC Switch', 'cc-switch.exe'),
-              path.join(process.env.LOCALAPPDATA || '', 'Programs', 'cc-switch', 'cc-switch.exe'),
-              path.join(process.env.ProgramFiles || '', 'CC Switch', 'cc-switch.exe'),
-            ];
-            const ccExe = ccPaths.find(p => fs.existsSync(p));
-            if (ccExe) require('child_process').exec(`start "" "${ccExe}"`);
-            // cmd 终端：预置 env var + PATH，敲 claude 即用
             const npmDir = path.join(os.homedir(), 'AppData', 'Roaming', 'npm');
             const banner = `echo 🎉 Claude Code 安装完成！ & echo. & echo 输入 claude 按回车即可使用`;
-            require('child_process').exec(`start cmd.exe /k "set PATH=${npmDir};%PATH% & set ANTHROPIC_API_KEY=${key} & set ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic & ${banner} & mode con cols=80 lines=10"`);
+            require('child_process').exec(`start cmd.exe /k "set PATH=${npmDir};%PATH% & ${banner} & mode con cols=80 lines=10"`);
           } catch (_) {}
         }
 
