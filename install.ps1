@@ -227,7 +227,7 @@ if ($LASTEXITCODE -eq 0) {
 
 if ($Silent) {
     # 输出 node 路径供主进程读取
-    try { Write-Host "[NODE_PATH]$(Get-Command node).Source"; } catch {}
+    try { $np = (Get-Command node).Source; Write-Host "[NODE_PATH]$np"; } catch {}
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "🎉 全部安装完成！" -ForegroundColor Green
     Write-Host "💡 在终端输入 claude 即可使用" -ForegroundColor Green
