@@ -272,10 +272,20 @@ db.close();
         } catch (_) { log('[WARN] Node.js 不可用', 'warn'); allOk = false; }
 
         // ② claude 命令存在
-        if (allOk) try {
-          require('child_process').execSync('where claude.cmd', { timeout: 3000, windowsHide: true, encoding: 'buffer' });
-          log('[OK] claude 命令已就绪 ✅', 'success');
-        } catch (_) { log('[WARN] claude 命令未找到', 'warn'); allOk = false; }
+        if (allOk) {
+          const claudePaths = [
+            path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd'),
+            path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude'),
+            'C:\\Program Files\\nodejs\\claude.cmd',
+          ];
+          const foundClaude = claudePaths.find(p => fs.existsSync(p));
+          if (foundClaude) {
+            log('[OK] claude 命令已就绪 ✅', 'success');
+          } else try {
+            require('child_process').execSync('where claude', { timeout: 3000, windowsHide: true, encoding: 'buffer' });
+            log('[OK] claude 命令已就绪 ✅', 'success');
+          } catch (_) { log('[WARN] claude 命令未找到', 'warn'); allOk = false; }
+        }
 
         // ③ cc-switch 数据库中 DeepSeek 已激活
         if (allOk && fs.existsSync(dbPath)) {
